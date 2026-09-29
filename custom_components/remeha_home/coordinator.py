@@ -34,6 +34,8 @@ class RemehaHomeUpdateCoordinator(DataUpdateCoordinator):
         self.technical_info = {}
         self.appliance_consumption_data = {}
         self.appliance_last_consumption_data_update = {}
+        self.heating_curve_last_update = {}
+        self.heating_curves = {}
 
     async def _async_update_data(self):
         """Fetch data from API endpoint.
@@ -141,6 +143,27 @@ class RemehaHomeUpdateCoordinator(DataUpdateCoordinator):
 
             for climate_zone in appliance["climateZones"]:
                 climate_zone_id = climate_zone["climateZoneId"]
+                if (climate_zone_id not in self.heating_curve_last_update) or (
+                    now - self.heating_curve_last_update[climate_zone_id]
+                    >= timedelta(minutes=14, seconds=45)
+                ):
+                    try:
+                        climate_zone["heatingCurve"] = (
+                            await self.api.async_get_heating_curve(climate_zone_id)
+                        )
+                        # Keep the curve in a separate dict: self.items[zone_id] is
+                        # replaced by the dashboard payload every 60 s, so the curve
+                        # would otherwise be lost between the 15-minute fetches.
+                        self.heating_curves[climate_zone_id] = climate_zone[
+                            "heatingCurve"
+                        ]
+                        self.heating_curve_last_update[climate_zone_id] = now
+                    except ClientResponseError as err:
+                        _LOGGER.warning(
+                            "Failed to request heating curve for zone %s: %s",
+                            climate_zone_id,
+                            err,
+                        )
                 # This assumes that all climate zones for an appliance share the same gateway
                 gateways = self.technical_info[appliance_id][
                     "internetConnectedGateways"

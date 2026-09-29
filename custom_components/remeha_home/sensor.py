@@ -18,6 +18,7 @@ import homeassistant.util.dt as dt_util
 
 from .const import (
     APPLIANCE_SENSOR_TYPES,
+    CLIMATE_ZONE_HEATING_CURVE_SENSOR_TYPES,
     CLIMATE_ZONE_SENSOR_TYPES,
     DOMAIN,
     HOT_WATER_ZONE_SENSOR_TYPES,
@@ -44,6 +45,11 @@ async def async_setup_entry(
         for climate_zone in appliance["climateZones"]:
             climate_zone_id = climate_zone["climateZoneId"]
             for entity_description in CLIMATE_ZONE_SENSOR_TYPES:
+                entities.append(
+                    RemehaHomeSensor(coordinator, climate_zone_id, entity_description)
+                )
+
+            for entity_description in CLIMATE_ZONE_HEATING_CURVE_SENSOR_TYPES:
                 entities.append(
                     RemehaHomeSensor(coordinator, climate_zone_id, entity_description)
                 )
@@ -83,8 +89,16 @@ class RemehaHomeSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         """Return the measurement value for this sensor."""
-        data = self._data
-        for part in self.entity_description.key.split("."):
+        # Heating curve values are stored separately: they are only fetched every
+        # 15 minutes and the regular item dict is overwritten by the dashboard
+        # payload every 60 s without them.
+        if self.entity_description.key.startswith("heatingCurve."):
+            data = self.coordinator.heating_curves.get(self.item_id, {})
+            parts = self.entity_description.key.split(".")[1:]
+        else:
+            data = self._data
+            parts = self.entity_description.key.split(".")
+        for part in parts:
             # If the key is missing for some reason, don't crash, instead return None
             if part not in data:
                 _LOGGER.warning(
