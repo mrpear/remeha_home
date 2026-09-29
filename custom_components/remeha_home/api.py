@@ -144,6 +144,17 @@ class RemehaHomeAPI:
         response.raise_for_status()
         return await response.json()
 
+    async def async_set_heating_curve(
+        self, climate_zone_id: str, slope: float, base_setpoint: float
+    ) -> None:
+        """Set the heating curve for a climate zone."""
+        response = await self._async_api_request(
+            "POST",
+            f"/climate-zones/{climate_zone_id}/heating-curve",
+            json={"slope": slope, "baseSetpoint": base_setpoint},
+        )
+        response.raise_for_status()
+
     async def async_get_consumption_data_for_today(self, appliance_id: str) -> dict:
         """Get technical information for an appliance."""
         today = datetime.datetime.now().replace(

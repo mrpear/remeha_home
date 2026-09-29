@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 import logging
 
+import voluptuous as vol
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
@@ -14,11 +15,16 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, PRECISION_HALVES, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddEntitiesCallback, current_platform
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import RemehaHomeAPI
-from .const import DOMAIN
+from .const import (
+    ATTR_BASE_SETPOINT,
+    ATTR_SLOPE,
+    DOMAIN,
+    SERVICE_SET_HEATING_CURVE,
+)
 from .coordinator import RemehaHomeUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -71,6 +77,17 @@ async def async_setup_entry(
             entities.append(RemehaHomeClimateEntity(api, coordinator, climate_zone_id))
 
     async_add_entities(entities)
+
+    current_platform().async_register_entity_service(
+        SERVICE_SET_HEATING_CURVE,
+        vol.Schema(
+            {
+                vol.Required(ATTR_SLOPE): vol.Coerce(float),
+                vol.Required(ATTR_BASE_SETPOINT): vol.Coerce(float),
+            }
+        ),
+        "async_set_heating_curve",
+    )
 
 
 class RemehaHomeClimateEntity(CoordinatorEntity, ClimateEntity):
@@ -208,6 +225,19 @@ class RemehaHomeClimateEntity(CoordinatorEntity, ClimateEntity):
         else:
             raise NotImplementedError()
 
+        await self.coordinator.async_request_refresh()
+
+    async def async_set_heating_curve(self, slope: float, base_setpoint: float) -> None:
+        """Set the heating curve parameters."""
+        _LOGGER.debug(
+            "Setting heating curve slope=%s base_setpoint=%s", slope, base_setpoint
+        )
+        await self.api.async_set_heating_curve(self.climate_zone_id, slope, base_setpoint)
+        # Refetch and store now so the curve sensors show the new values
+        # immediately instead of waiting for the next scheduled curve fetch.
+        self.coordinator.heating_curves[self.climate_zone_id] = (
+            await self.api.async_get_heating_curve(self.climate_zone_id)
+        )
         await self.coordinator.async_request_refresh()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:

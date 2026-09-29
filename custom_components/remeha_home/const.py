@@ -13,6 +13,10 @@ from homeassistant.const import UnitOfEnergy, UnitOfTemperature, UnitOfPressure
 
 DOMAIN = "remeha_home"
 
+SERVICE_SET_HEATING_CURVE = "set_heating_curve"
+ATTR_SLOPE = "slope"
+ATTR_BASE_SETPOINT = "base_setpoint"
+
 APPLIANCE_SENSOR_TYPES = [
     SensorEntityDescription(
         key="waterPressure",
