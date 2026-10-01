@@ -17,6 +17,36 @@ SERVICE_SET_HEATING_CURVE = "set_heating_curve"
 ATTR_SLOPE = "slope"
 ATTR_BASE_SETPOINT = "base_setpoint"
 
+CONSUMPTION_FIELDS = [
+    ("heatingEnergyConsumed", "Heating Energy Consumed"),
+    ("hotWaterEnergyConsumed", "Hot Water Energy Consumed"),
+    ("coolingEnergyConsumed", "Cooling Energy Consumed"),
+    ("heatingEnergyDelivered", "Heating Energy Delivered"),
+    ("hotWaterEnergyDelivered", "Hot Water Energy Delivered"),
+    ("coolingEnergyDelivered", "Cooling Energy Delivered"),
+]
+
+# Yesterday / month-to-date / year-to-date energy sensors. Values come from the
+# same energyconsumption endpoints as the "today" sensors, so they follow the
+# key prefix <period>.<field> and are enabled manually in the UI.
+ENERGY_PERIOD_SENSOR_TYPES: list[SensorEntityDescription] = []
+for _period_key, _period_label in (
+    ("consumptionYesterday", "Yesterday"),
+    ("consumptionMonth", "This Month"),
+    ("consumptionYear", "This Year"),
+):
+    for _field, _label in CONSUMPTION_FIELDS:
+        ENERGY_PERIOD_SENSOR_TYPES.append(
+            SensorEntityDescription(
+                key=f"{_period_key}.{_field}",
+                name=f"{_label} {_period_label}",
+                entity_registry_enabled_default=False,
+                native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                device_class=SensorDeviceClass.ENERGY,
+                state_class=SensorStateClass.TOTAL_INCREASING,
+            )
+        )
+
 APPLIANCE_SENSOR_TYPES = [
     SensorEntityDescription(
         key="waterPressure",
@@ -88,7 +118,7 @@ APPLIANCE_SENSOR_TYPES = [
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
     ),
-]
+] + ENERGY_PERIOD_SENSOR_TYPES
 
 CLIMATE_ZONE_SENSOR_TYPES = [
     SensorEntityDescription(

@@ -33,6 +33,9 @@ class RemehaHomeUpdateCoordinator(DataUpdateCoordinator):
         self.device_info = {}
         self.technical_info = {}
         self.appliance_consumption_data = {}
+        self.appliance_consumption_data_yesterday = {}
+        self.appliance_consumption_data_month = {}
+        self.appliance_consumption_data_year = {}
         self.appliance_last_consumption_data_update = {}
         self.heating_curve_last_update = {}
         self.heating_curves = {}
@@ -83,33 +86,53 @@ class RemehaHomeUpdateCoordinator(DataUpdateCoordinator):
                 >= timedelta(minutes=14, seconds=45)
             ):
                 try:
-                    consumption_data = (
-                        await self.api.async_get_consumption_data_for_today(
-                            appliance_id
-                        )
+                    today_start = now.replace(
+                        hour=0, minute=0, second=0, microsecond=0
                     )
-                    _LOGGER.debug(
-                        "Requested consumption data for appliance %s: %s",
-                        appliance_id,
-                        consumption_data,
+                    yesterday_start = today_start - timedelta(days=1)
+                    end_of_day = today_start + timedelta(
+                        hours=23, minutes=59, seconds=59
                     )
 
-                    if len(consumption_data["data"]) > 0:
-                        self.appliance_consumption_data[appliance_id] = (
-                            consumption_data["data"][0]
-                        )
-                    else:
-                        _LOGGER.warning(
-                            "No consumption data found for appliance %s", appliance_id
-                        )
-                        self.appliance_consumption_data[appliance_id] = {
-                            "heatingEnergyConsumed": 0.0,
-                            "hotWaterEnergyConsumed": 0.0,
-                            "coolingEnergyConsumed": 0.0,
-                            "heatingEnergyDelivered": 0.0,
-                            "hotWaterEnergyDelivered": 0.0,
-                            "coolingEnergyDelivered": 0.0,
-                        }
+                    today_data = await self.api.async_get_consumption_data_for_period(
+                        appliance_id, today_start, end_of_day, "daily"
+                    )
+                    yesterday_data = await self.api.async_get_consumption_data_for_period(
+                        appliance_id,
+                        yesterday_start,
+                        yesterday_start + timedelta(hours=23, minutes=59, seconds=59),
+                        "daily",
+                    )
+                    month_data = await self.api.async_get_consumption_data_for_period(
+                        appliance_id, today_start, end_of_day, "monthly"
+                    )
+                    year_data = await self.api.async_get_consumption_data_for_period(
+                        appliance_id,
+                        today_start.replace(month=1, day=1),
+                        now,
+                        "yearly",
+                    )
+                    _LOGGER.debug(
+                        "Requested consumption data for appliance %s: today=%s yesterday=%s month=%s year=%s",
+                        appliance_id,
+                        today_data,
+                        yesterday_data,
+                        month_data,
+                        year_data,
+                    )
+
+                    self.appliance_consumption_data[appliance_id] = (
+                        self._sum_consumption_data(today_data, appliance_id)
+                    )
+                    self.appliance_consumption_data_yesterday[appliance_id] = (
+                        self._sum_consumption_data(yesterday_data, appliance_id)
+                    )
+                    self.appliance_consumption_data_month[appliance_id] = (
+                        self._sum_consumption_data(month_data, appliance_id)
+                    )
+                    self.appliance_consumption_data_year[appliance_id] = (
+                        self._sum_consumption_data(year_data, appliance_id)
+                    )
 
                     self.appliance_last_consumption_data_update[appliance_id] = now
                 except ClientResponseError as err:
@@ -211,6 +234,31 @@ class RemehaHomeUpdateCoordinator(DataUpdateCoordinator):
                 )
 
         return data
+
+    def _sum_consumption_data(self, payload: dict, appliance_id: str) -> dict:
+        """Aggregate consumption rows returned by the API into energy totals.
+
+        "daily" returns one row per day in the requested range, "monthly"/
+        "yearly" a single aggregated row; summing the known fields handles all
+        three uniformly.
+        """
+        totals = {
+            "heatingEnergyConsumed": 0.0,
+            "hotWaterEnergyConsumed": 0.0,
+            "coolingEnergyConsumed": 0.0,
+            "heatingEnergyDelivered": 0.0,
+            "hotWaterEnergyDelivered": 0.0,
+            "coolingEnergyDelivered": 0.0,
+        }
+        rows = payload.get("data", [])
+        if not rows:
+            _LOGGER.warning(
+                "No consumption data found for appliance %s", appliance_id
+            )
+        for row in rows:
+            for key in totals:
+                totals[key] += row.get(key) or 0.0
+        return totals
 
     def get_by_id(self, item_id: str):
         """Return item with the specified item id."""

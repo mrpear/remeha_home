@@ -27,6 +27,14 @@ from .coordinator import RemehaHomeUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+# Maps the key prefix of an energy period sensor to the coordinator attribute
+# holding the aggregated totals for that period.
+CONSUMPTION_PERIOD_DATA = {
+    "consumptionYesterday": "appliance_consumption_data_yesterday",
+    "consumptionMonth": "appliance_consumption_data_month",
+    "consumptionYear": "appliance_consumption_data_year",
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -89,15 +97,23 @@ class RemehaHomeSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         """Return the measurement value for this sensor."""
+        key = self.entity_description.key
         # Heating curve values are stored separately: they are only fetched every
         # 15 minutes and the regular item dict is overwritten by the dashboard
         # payload every 60 s without them.
-        if self.entity_description.key.startswith("heatingCurve."):
+        if key.startswith("heatingCurve."):
             data = self.coordinator.heating_curves.get(self.item_id, {})
-            parts = self.entity_description.key.split(".")[1:]
+            parts = key.split(".")[1:]
+        elif key.split(".", 1)[0] in CONSUMPTION_PERIOD_DATA:
+            # Energy totals for yesterday / month / year are aggregated in the
+            # coordinator and stored per-appliance, outside the dashboard item.
+            data = getattr(self.coordinator, CONSUMPTION_PERIOD_DATA[key.split(".", 1)[0]]).get(
+                self.item_id, {}
+            )
+            parts = key.split(".")[1:]
         else:
             data = self._data
-            parts = self.entity_description.key.split(".")
+            parts = key.split(".")
         for part in parts:
             # If the key is missing for some reason, don't crash, instead return None
             if part not in data:

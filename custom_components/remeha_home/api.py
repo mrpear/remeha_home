@@ -156,18 +156,34 @@ class RemehaHomeAPI:
         response.raise_for_status()
 
     async def async_get_consumption_data_for_today(self, appliance_id: str) -> dict:
-        """Get technical information for an appliance."""
+        """Get today's energy consumption for an appliance."""
         today = datetime.datetime.now().replace(
             hour=0, minute=0, second=0, microsecond=0
         )
         end_of_today = today + datetime.timedelta(hours=23, minutes=59, seconds=59)
+        return await self.async_get_consumption_data_for_period(
+            appliance_id, today, end_of_today, "daily"
+        )
 
-        today_string = today.strftime("%Y-%m-%d %H:%M:%S.%fZ")
-        end_of_today_string = end_of_today.strftime("%Y-%m-%d %H:%M:%S.%fZ")
+    async def async_get_consumption_data_for_period(
+        self,
+        appliance_id: str,
+        start: datetime.datetime,
+        end: datetime.datetime,
+        granularity: str,
+    ) -> dict:
+        """Get energy consumption for a period.
+
+        granularity is one of "daily", "monthly" or "yearly". "daily" returns
+        one row per day in the range, "monthly"/"yearly" return a single
+        aggregated row.
+        """
+        start_string = start.strftime("%Y-%m-%d %H:%M:%S.%fZ")
+        end_string = end.strftime("%Y-%m-%d %H:%M:%S.%fZ")
 
         response = await self._async_api_request(
             "GET",
-            f"/appliances/{appliance_id}/energyconsumption/daily?startDate={today_string}&endDate={end_of_today_string}",
+            f"/appliances/{appliance_id}/energyconsumption/{granularity}?startDate={start_string}&endDate={end_string}",
         )
         response.raise_for_status()
         return await response.json()
