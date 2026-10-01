@@ -52,5 +52,33 @@ Click the button or follow the instructions.
 1. Click "Next"
 1. Enjoy
 
+## Deployment to our Home Assistant
+
+This fork is deployed (as a local overlay on the HACS `remeha_home` install) to
+the home Home Assistant OS box (VM103 on the NAS Proxmox host). The local
+patches it carries: heating-curve sensors + set service (v0.1.19) and the
+HA 2026.10+ `async_get_current_platform()` compatibility fix.
+
+**A future HACS update overwrites the deployed copy — re-deploy from this
+fork (commit on `main` first) after any HACS update.**
+
+Deploy flow (SSH addon on the HAOS box, root, port 22222):
+
+1. Commit the change on `main` first.
+2. Copy changed `*.py` + `manifest.json` to the live config root:
+   ```
+   scp -O -P 22222 custom_components/remeha_home/*.py \
+     root@<haos-ip>:/mnt/data/supervisor/homeassistant/custom_components/remeha_home/
+   ```
+   Never copy `__pycache__/`. For a fresh install use `scp -O -r` of the whole
+   `custom_components/remeha_home/` directory (this box has no `/config/...`
+   symlinks — the live root is `/mnt/data/supervisor/homeassistant/`).
+   (`-O` is required: the addon ships no `sftp-server` subsystem.)
+3. Reload the integration (Settings → Devices → Remeha Home → reload) or
+   `ha core restart`.
+4. Sanity-check the new entities/states.
+
+Credentials never live in this repo.
+
 ## API documentation
 For information on the Remeha Home API see [API documentation](documentation/api.md).
