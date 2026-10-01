@@ -15,7 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, PRECISION_HALVES, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback, current_platform
+from homeassistant.helpers.entity_platform import AddEntitiesCallback, async_get_current_platform
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import RemehaHomeAPI
@@ -78,7 +78,7 @@ async def async_setup_entry(
 
     async_add_entities(entities)
 
-    current_platform().async_register_entity_service(
+    async_get_current_platform().async_register_entity_service(
         SERVICE_SET_HEATING_CURVE,
         vol.Schema(
             {
